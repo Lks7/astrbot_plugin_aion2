@@ -1,24 +1,136 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from __future__ import annotations
 
-@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
-class MyPlugin(Star):
+from pathlib import Path
+
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.star import Context, Star, register
+
+from aion_tracker.plugin import AionTrackerPlugin
+
+
+@register(
+    "astrbot_plugin_aion_tracker",
+    "local",
+    "永恒之塔多角色养成追踪，支持自然语言录入与自动结算。",
+    "0.1.4",
+)
+class AionTrackerStarPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        data_dir = Path(__file__).resolve().parent / "data"
+        self.plugin = AionTrackerPlugin(data_dir=data_dir)
 
-    async def initialize(self):
-        """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
+    @filter.command_group("at")
+    def at(self):
+        pass
 
-    # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        """这是一个 hello world 指令""" # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
-        user_name = event.get_sender_name()
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
-        logger.info(message_chain)
-        yield event.plain_result(f"Hello, {user_name}, 你发了 {message_str}!") # 发送一条纯文本消息
+    @at.command("addchar")
+    async def at_addchar(
+        self,
+        event: AstrMessageEvent,
+        char_name: str,
+        char_class: str,
+        level: int = 1,
+    ):
+        yield event.plain_result(
+            self.plugin.handle_add_character(
+                user_id=event.get_sender_id(),
+                char_name=char_name,
+                char_class=char_class,
+                level=level,
+            )
+        )
+
+    @at.command("switch")
+    async def at_switch(self, event: AstrMessageEvent, char_name: str):
+        yield event.plain_result(
+            self.plugin.handle_switch(
+                user_id=event.get_sender_id(), char_name=char_name
+            )
+        )
+
+    @at.command("status")
+    async def at_status(self, event: AstrMessageEvent):
+        yield event.plain_result(
+            self.plugin.handle_status(user_id=event.get_sender_id())
+        )
+
+    @at.command("all")
+    async def at_all(self, event: AstrMessageEvent):
+        yield event.plain_result(self.plugin.handle_all(user_id=event.get_sender_id()))
+
+    @at.command("allres")
+    async def at_allres(self, event: AstrMessageEvent):
+        yield event.plain_result(
+            self.plugin.handle_all_resources(user_id=event.get_sender_id())
+        )
+
+    @at.command("add")
+    async def at_add(self, event: AstrMessageEvent, resource_name: str, amount: int):
+        yield event.plain_result(
+            self.plugin.handle_add_resource(
+                user_id=event.get_sender_id(),
+                resource_name=resource_name,
+                amount=amount,
+            )
+        )
+
+    @at.command("update")
+    async def at_update(
+        self,
+        event: AstrMessageEvent,
+        stamina: int,
+        nightmare_tix: int,
+        subjugation_tix: int,
+        awaken_tix: int,
+        transcend_count: int,
+        expedition_count: int,
+        challenge_count: int,
+        kinah: int,
+    ):
+        yield event.plain_result(
+            self.plugin.handle_update_full(
+                user_id=event.get_sender_id(),
+                stamina=stamina,
+                nightmare_tix=nightmare_tix,
+                subjugation_tix=subjugation_tix,
+                awaken_tix=awaken_tix,
+                transcend_count=transcend_count,
+                expedition_count=expedition_count,
+                challenge_count=challenge_count,
+                kinah=kinah,
+            )
+        )
+
+    @at.command("run")
+    async def at_run(
+        self,
+        event: AstrMessageEvent,
+        char_name: str,
+        expedition_runs: int = 0,
+        transcend_runs: int = 0,
+    ):
+        yield event.plain_result(
+            self.plugin.handle_dungeon_runs(
+                user_id=event.get_sender_id(),
+                char_name=char_name,
+                expedition_runs=expedition_runs,
+                transcend_runs=transcend_runs,
+            )
+        )
+
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_message_nlp(self, event: AstrMessageEvent):
+        text = (event.message_str or "").strip()
+        if not text:
+            return
+        if text.startswith("/"):
+            return
+        resp = self.plugin.handle_natural_message(
+            user_id=event.get_sender_id(), text=text
+        )
+        if resp:
+            yield event.plain_result(resp)
 
     async def terminate(self):
-        """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+        self.plugin.service.close()
