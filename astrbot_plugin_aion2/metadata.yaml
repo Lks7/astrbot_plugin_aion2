@@ -1,7 +1,0 @@
-name: astrbot_plugin_aion_tracker
-display_name: Aion 多角色管家
-desc: 永恒之塔多角色养成追踪，支持自然语言录入与自动结算。
-version: v0.1.4
-author: local
-repo: https://github.com/Lks7/astrbot_plugin_aion2
-astrbot_version: ">=4.16,<5"
