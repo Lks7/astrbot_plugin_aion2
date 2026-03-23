@@ -10,6 +10,7 @@ class Character:
     char_name: str
     char_class: str
     level: int = 1
+    power: int = 0
 
 
 @dataclass(slots=True)

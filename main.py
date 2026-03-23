@@ -35,6 +35,7 @@ class AionTrackerStarPlugin(Star):
         event: AstrMessageEvent,
         char_name: str,
         char_class: str,
+        power: int = 0,
         level: int = 1,
     ):
         yield event.plain_result(
@@ -43,6 +44,7 @@ class AionTrackerStarPlugin(Star):
                 char_name=char_name,
                 char_class=char_class,
                 level=level,
+                power=power,
             )
         )
 

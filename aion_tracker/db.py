@@ -37,6 +37,7 @@ class Database:
                 char_name TEXT NOT NULL,
                 class TEXT NOT NULL,
                 level INTEGER NOT NULL DEFAULT 1,
+                power INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, char_name)
             )
@@ -75,6 +76,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS user_state (
                 user_id TEXT PRIMARY KEY,
                 active_char_name TEXT,
+                mode TEXT NOT NULL DEFAULT '',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -147,6 +149,18 @@ class Database:
         if "challenge_count" not in col_names:
             self.execute(
                 "ALTER TABLE resources ADD COLUMN challenge_count INTEGER NOT NULL DEFAULT 28"
+            )
+        char_cols = self.query_all("PRAGMA table_info(characters)")
+        char_col_names = {row["name"] for row in char_cols}
+        if "power" not in char_col_names:
+            self.execute(
+                "ALTER TABLE characters ADD COLUMN power INTEGER NOT NULL DEFAULT 0"
+            )
+        user_state_cols = self.query_all("PRAGMA table_info(user_state)")
+        user_state_col_names = {row["name"] for row in user_state_cols}
+        if "mode" not in user_state_col_names:
+            self.execute(
+                "ALTER TABLE user_state ADD COLUMN mode TEXT NOT NULL DEFAULT ''"
             )
 
     @staticmethod

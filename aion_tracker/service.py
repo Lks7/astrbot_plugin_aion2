@@ -43,17 +43,23 @@ class AionTrackerService:
         self.db.close()
 
     def add_character(
-        self, user_id: str, char_name: str, char_class: str, level: int = 1
+        self,
+        user_id: str,
+        char_name: str,
+        char_class: str,
+        level: int = 1,
+        power: int = 0,
     ) -> Character:
         self.db.execute(
             """
-            INSERT INTO characters(user_id, char_name, class, level)
-            VALUES(?, ?, ?, ?)
+            INSERT INTO characters(user_id, char_name, class, level, power)
+            VALUES(?, ?, ?, ?, ?)
             ON CONFLICT(user_id, char_name) DO UPDATE SET
                 class = excluded.class,
-                level = excluded.level
+                level = excluded.level,
+                power = excluded.power
             """,
-            (user_id, char_name, char_class, level),
+            (user_id, char_name, char_class, level, power),
         )
         self.db.execute(
             """
@@ -64,12 +70,16 @@ class AionTrackerService:
             (user_id, char_name),
         )
         return Character(
-            user_id=user_id, char_name=char_name, char_class=char_class, level=level
+            user_id=user_id,
+            char_name=char_name,
+            char_class=char_class,
+            level=level,
+            power=power,
         )
 
     def list_characters(self, user_id: str) -> list[Character]:
         rows = self.db.query_all(
-            "SELECT user_id, char_name, class, level FROM characters WHERE user_id = ? ORDER BY char_name",
+            "SELECT user_id, char_name, class, level, power FROM characters WHERE user_id = ? ORDER BY char_name",
             (user_id,),
         )
         return [
@@ -78,6 +88,7 @@ class AionTrackerService:
                 char_name=row["char_name"],
                 char_class=row["class"],
                 level=row["level"],
+                power=row["power"],
             )
             for row in rows
         ]
@@ -122,6 +133,27 @@ class AionTrackerService:
             (user_id,),
         )
         return None if row is None else row["active_char_name"]
+
+    def set_mode(self, user_id: str, mode: str) -> None:
+        current_active = self.get_active_character_name(user_id)
+        self.db.execute(
+            """
+            INSERT INTO user_state(user_id, active_char_name, mode)
+            VALUES(?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                active_char_name = COALESCE(user_state.active_char_name, excluded.active_char_name),
+                mode = excluded.mode,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, current_active, mode),
+        )
+
+    def get_mode(self, user_id: str) -> str:
+        row = self.db.query_one(
+            "SELECT mode FROM user_state WHERE user_id = ?",
+            (user_id,),
+        )
+        return "" if row is None else str(row["mode"] or "")
 
     def get_resources(self, user_id: str, char_name: str) -> Resources | None:
         self._refresh_ticket_resets(user_id, char_name)
@@ -369,7 +401,7 @@ class AionTrackerService:
 
     def render_status(self, user_id: str, char_name: str) -> str:
         char_row = self.db.query_one(
-            "SELECT char_name, class, level FROM characters WHERE user_id = ? AND char_name = ?",
+            "SELECT char_name, class, level, power FROM characters WHERE user_id = ? AND char_name = ?",
             (user_id, char_name),
         )
         if char_row is None:
@@ -384,7 +416,7 @@ class AionTrackerService:
         )
         next_tick_text = self._next_stamina_tick_text(user_id, char_name)
         return (
-            f"角色: {char_row['char_name']} ({char_row['class']}) Lv.{char_row['level']}\n"
+            f"角色: {char_row['char_name']} ({char_row['class']}) 战力:{char_row['power']}\n"
             f"体力: {resources.stamina} (每3小时+15，{next_tick_text})\n"
             f"噩梦券: {resources.nightmare_tix}\n"
             f"讨伐券: {resources.subjugation_tix}\n"
@@ -409,7 +441,7 @@ class AionTrackerService:
                 continue
             marker = "*" if active == char.char_name else " "
             lines.append(
-                f"{marker} {char.char_name:<10} {char.char_class:<6} Lv.{char.level:<2} "
+                f"{marker}名字:{char.char_name:<8} 职业:{char.char_class:<6} 战力:{char.power:<6} "
                 f"体力:{res.stamina:<4} 噩梦:{res.nightmare_tix:<3} 觉醒:{res.awaken_tix:<3} 讨伐:{res.subjugation_tix:<3} "
                 f"超越:{res.transcend_count:<3} 远征:{res.expedition_count:<3} 挑战:{res.challenge_count:<3} 基纳:{res.kinah}"
             )
